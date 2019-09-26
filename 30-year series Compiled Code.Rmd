@@ -1,0 +1,727 @@
+---
+title: "30-year series compiled"
+output: 
+---
+
+```{r}
+library(forecast)
+library(zoo)
+```
+
+```{r}
+beer_data <- read.csv("beer_data.csv")
+```
+
+```{r}
+beer_ts<- ts(beer_data$Megalitres, 
+                   start = c(1980, 1), end = c(2010, 2), freq = 4)
+```
+
+```{r}
+nValid <- 4 
+nTrain <- length(beer_ts) - nValid
+train.ts <- window(beer_ts, start = c(1980, 1), end = c(1980, nTrain))
+valid.ts <- window(beer_ts, start = c(1980, nTrain + 1), 
+                   end = c(1980, nTrain + nValid))
+```
+
+```{r}
+plot(beer_ts, 
+     xlab = "Year", ylab = "Production in Megaliters", 
+     ylim = c(200, 700),
+     xaxt = 'n',
+     main = "30 Year Production Levels", col = "blue")
+
+axis(1, at = seq(1980, 2010, 1), labels = format(seq(1980, 2010, 1)))
+```
+
+```{r}
+autocor <- Acf(beer_ts, lag.max = 12 ,
+               main = "30 Year Autocorrelation for Beer Production")
+```
+
+Holt-Winters
+```{r}
+# Holts-Winter based on training data 
+hw.ZZZ <- ets(train.ts, model = "ZZZ")
+hw.ZZZ
+```
+
+```{r}
+hw.ZZZ.pred <- forecast(hw.ZZZ, h = nValid, level = 0)
+hw.ZZZ.pred
+```
+
+```{r}
+plot(hw.ZZZ.pred, 
+xlab = "Year", ylab = "Production", 
+     ylim = c(200, 700),
+     xlim = c(1980, 2015),
+     xaxt = 'n',
+     bty = "l",
+     main = " 30 year Holts Winters Model- Training/Val", col = "blue")
+
+axis(1, at = seq(1980, 2015, 1), labels = format(seq(1980, 2015, 1))) 
+
+legend(1980,600, legend = c("Production", "Training",
+                             "Validation Forecast"), 
+       col = c("black", "blue" , "blue"), 
+       lty = c(1, 1, 5), lwd =c(2, 2, 2), bty = "n")
+
+lines(lines(hw.ZZZ.pred$fitted))
+
+lines(valid.ts)
+# vertical lines and titles
+    
+          
+#x axis (same values = straight up)  # y axis
+lines(c(2009.2, 2009.2), c(0, 700))
+
+
+text(1995, 675, "Training")
+
+text(2012, 675, "Validation")
+
+
+arrows(1980, 635, 2007, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+```
+
+```{r}
+print("HW ZZZ") 
+round(accuracy(hw.ZZZ.pred, valid.ts), 3)
+```
+
+```{r}
+# Holt Winters on All the data
+hw.zzz.all <- ets(beer_ts, model = "ZZZ")
+hw.zzz.all
+```
+
+```{r}
+hw.zzz.all.pred <- forecast(hw.zzz.all, h = nValid, level = 0)
+hw.zzz.all.pred
+```
+
+```{r}
+plot(hw.zzz.all.pred, 
+xlab = "Year", ylab = "Production", 
+     ylim = c(200, 700),
+     xlim = c(1980, 2015),
+     xaxt = 'n',
+     bty = "l",
+     main = "30 Year Holt-Winter", col = "blue")
+
+legend(1980,600, legend = c("Production", "Training",
+                             "4 Period Future Forecast"), 
+       col = c("black", "blue" , "blue"), 
+       lty = c(1, 1, 5), lwd =c(2, 2, 2), bty = "n")
+
+axis(1, at = seq(1980, 2015, 1), labels = format(seq(1980, 2015, 1))) 
+
+
+lines(hw.zzz.all.pred$fitted)
+lines(valid.ts)
+# vertical lines and titles
+    
+          
+# x axis (same values = straight up)  # y axis
+lines(c(2010.4, 2010.4), c(0, 700))
+
+
+text(1995, 675, "Training")
+
+text(2014, 675, "Future")
+
+
+arrows(1980, 635, 2007, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+
+arrows(2011, 635, 2016, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+```
+
+```{r}
+print("Holt-Winter's Model with Automated Parameters")
+round(accuracy(hw.zzz.all.pred$fitted, beer_ts), 3)
+```
+
+```{r}
+# ACF For HW Residuls
+
+Acf(hw.zzz.all$residuals, lag.max = 12, 
+    main = "30-Year Autocorrelation for Holt-Winters residuals")
+```
+
+```{r}
+# Use AR(1) to deal with the autocorrelation
+
+hw.zzz.residual.ar1 <- Arima(hw.zzz.all$residuals, order = c(1,0,0))
+
+# Use summary() to identify parameters of AR(1) model.
+summary(hw.zzz.residual.ar1)
+```
+
+```{r}
+# Residuals of Residuals
+Acf(hw.zzz.residual.ar1$residuals, lag.max = 12, 
+    main = "Autocorrelation AR(1) Model")
+```
+
+```{r}
+# Use forecast() function to make prediction of residuals into the future 4 months.
+
+hw.zzz.residual.ar1.pred <- forecast(hw.zzz.residual.ar1, h = 4, level = 0)
+
+hw.zzz.residual.ar1.pred
+```
+
+```{r}
+# Make a two-level model for the Holts Winter and AR(1) model
+
+hw.zzz.ar1.pred <- hw.zzz.all.pred$mean + hw.zzz.residual.ar1.pred$mean
+hw.zzz.ar1.pred # combined forecast
+```
+
+```{r}
+# Combined Forecast using HW with AR1
+
+hw.zzz.ar1.df <- data.frame(hw.zzz.all.pred$mean,
+                            hw.zzz.residual.ar1.pred$mean,
+                            hw.zzz.ar1.pred)
+
+names(hw.zzz.ar1.df) <- c("HW ZZZ Forecast",
+                          "HW AR(1) Residuals",
+                          "HW ZZZ + AR(1)")
+
+hw.zzz.ar1.df
+```
+
+```{r}
+plot(beer_ts, 
+xlab = "Year", ylab = "Production", 
+     ylim = c(200, 700),
+     xlim = c(1980, 2015),
+     xaxt = 'n',
+     bty = "l",
+     main = "Holt-Winters + AR(1) for Residuals", col = "black")
+
+legend(1980,600, legend = c("Production", "Training",
+                             "Validation Forecast"), 
+       col = c("black", "blue" , "blue"), 
+       lty = c(1, 1, 5), lwd =c(2, 2, 2), bty = "n")
+
+axis(1, at = seq(1980, 2015, 1), labels = format(seq(1980, 2015, 1))) 
+
+lines(hw.zzz.all$fitted + hw.zzz.residual.ar1$fitted, col = "blue")
+
+lines(hw.zzz.ar1.pred, col = "blue", lty = 5)
+
+
+lines(c(2010.4, 2010.4), c(0, 700))
+
+
+text(1995, 675, "Training")
+
+text(2014, 675, "Future")
+
+
+arrows(1980, 635, 2007, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+
+arrows(2011, 635, 2016, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+```
+
+```{r}
+# Apply a TMA for Residuals
+hw.zzz.all.res <- hw.zzz.all$residuals
+```
+
+```{r}
+# Apply trailing MA with 4 periods in the window to residuals.
+hw.ma.trailing.res_4 <- rollmean(hw.zzz.all.res, k = 4, align = "right")
+```
+
+```{r}
+# Create forecast for residuals for the 4 periods into the future. (why are they the same)
+
+hw.ma.trailing.res_4.pred <- forecast(hw.ma.trailing.res_4, h = 4, level = 0)
+hw.ma.trailing.res_4.pred
+```
+
+```{r}
+hw.zzz.tma <- hw.zzz.all.pred$mean + hw.ma.trailing.res_4.pred$mean
+hw.zzz.tma
+```
+
+```{r}
+hw.zzz.tma.df <- data.frame(hw.zzz.all.pred$mean, hw.ma.trailing.res_4.pred$mean, 
+                               hw.zzz.tma)
+names(hw.zzz.tma.df) <- c("HW Pred", "TMA Pred", "Forecast")
+
+hw.zzz.tma.df
+```
+
+```{r}
+plot(beer_ts, 
+     xlab = "Time", ylab = "Production (In Millions)", ylim = c(100, 700), bty = "l",
+     xaxt = "n", xlim = c(1980, 2014),
+     main = "30 Year Holt-Winter's Model + Trailing Moving Average") 
+
+axis(1, at = seq(1980, 2014, 1), labels = format(seq(1980, 2014, 1)))
+
+lines(hw.zzz.all$fitted + hw.ma.trailing.res_4, col = "blue")
+lines(hw.zzz.tma, col = "blue", lty = 5, lwd =2)
+
+legend(1993,300, legend = c("Production", "HW + TMA",
+                             "4 Period  Future Forecast"), 
+       col = c("black", "blue" , "blue"), 
+       lty = c(1, 1, 5), lwd =c(2, 2, 2), bty = "n")
+
+lines(c(2010.4, 2010.4), c(0, 700))
+
+
+text(1995, 675, "Training")
+
+text(2014, 675, "Future")
+
+
+arrows(1980, 635, 2007, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+
+arrows(2011, 635, 2014.5, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+```
+
+```{r}
+print("Two-Level: Holt's Winter + AR(1)")
+round(accuracy(hw.zzz.all.pred$fitted + hw.zzz.residual.ar1.pred$fitted, beer_ts), 3)
+print('---------------------------------------------------------------')
+print("Two-Level: Holts Winter + Trailing MA")
+round(accuracy(hw.zzz.all$fitted + hw.ma.trailing.res_4, beer_ts), 3)
+print('---------------------------------------------------------------')
+print("HW on All the Data")
+round(accuracy(hw.zzz.all$fitted, beer_ts), 3)
+```
+
+Regression Models
+```{r}
+# Quadratic Trend With Seasonality
+
+train.quad.seas <- tslm(train.ts ~ trend + I(trend^2) + season)
+
+summary(train.quad.seas)
+```
+
+```{r}
+train.quad.seas.pred <- forecast(train.quad.seas, h = nValid, level = 0)
+
+train.quad.seas.pred
+```
+
+```{r}
+plot(train.quad.seas.pred, 
+xlab = "Year", ylab = "Production", 
+     ylim = c(200, 700),
+     xlim = c(1980, 2015),
+     xaxt = 'n',
+     bty = "l",
+     main = "Quadratic Trend and Seasonality (Train/Val)", col = "blue")
+
+axis(1, at = seq(1980, 2015, 1), labels = format(seq(1980, 2015, 1))) 
+
+lines(train.quad.seas$fitted)
+lines(valid.ts)
+# vertical lines and titles
+    
+          
+# x axis (same values = straight up)  # y axis
+lines(c(2009.2, 2009.2), c(0, 700))
+
+
+text(1995, 675, "Training")
+
+text(2012, 675, "Validation")
+
+
+arrows(1980, 635, 2007, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+```
+
+```{r}
+# 57% difference in RMSE
+round(accuracy(train.quad.seas.pred, valid.ts), 3)
+```
+
+```{r}
+train.lin.seas <- tslm(train.ts ~ trend + season)
+
+summary(train.lin.seas)
+```
+
+```{r}
+train.lin.seas.pred <- forecast(train.lin.seas, h = nValid, level = 0)
+round(accuracy(train.lin.seas.pred, valid.ts), 3) # OVERFIT
+```
+
+```{r}
+# Regression with quadratic trend and seasonality -- on all the data
+
+trend.season <- tslm(beer_ts ~ trend + I(trend^2) + season)
+summary(trend.season)
+```
+
+```{r}
+trend.season.pred <- forecast(trend.season, h = 4 , level = 0)
+trend.season.pred
+```
+
+```{r}
+plot(trend.season.pred, 
+xlab = "Year", ylab = "Production", 
+     ylim = c(200, 700),
+     xlim = c(1980, 2015),
+     xaxt = 'n',
+     bty = "l",
+     main = "Regression with Quadratic Trend and Seasonality", col = "blue")
+
+axis(1, at = seq(1980, 2015, 1), labels = format(seq(1980, 2015, 1))) 
+
+lines(trend.season.pred$fitted)
+lines(valid.ts)
+# vertical lines and titles
+    
+          
+# x axis (same values = straight up)  # y axis
+lines(c(2010.2, 2010.2), c(0, 700))
+
+
+text(1995, 675, "Training")
+
+text(2014, 675, "Future")
+
+
+arrows(1980, 635, 2007, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+
+arrows(2011, 635, 2016, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+```
+
+```{r}
+print('Regression with quadratic trend and seasonality')
+round(accuracy(trend.season.pred$fitted, beer_ts),3)
+print('naive')
+round(accuracy((naive(beer_ts))$fitted, beer_ts), 3)
+print('snaive')
+round(accuracy((snaive(beer_ts))$fitted, beer_ts), 3)
+```
+
+```{r}
+# Identify and display residulas for time series based on the regression
+# (differences between actual and regression values in the same periods)
+
+reg.trend.seas.res <- trend.season.pred$residuals
+reg.trend.seas.res
+```
+
+```{r}
+ma.trailing.res_4 <- rollmean(reg.trend.seas.res, k = 4, align = "right")
+
+ma.trailing.res_4
+```
+
+```{r}
+# Create forecast for residuals for the 4 periods into the future.
+
+ma.trailing.res_4.pred <- forecast(ma.trailing.res_4, h = 4, level = 0)
+
+ma.trailing.res_4.pred
+```
+
+```{r}
+# To develop real forecast for 4 periods into the future, 
+# combine regression forecast and trailing MA forecast for residuals.
+
+ts.forecast.4 <- trend.season.pred$mean + ma.trailing.res_4.pred$mean
+ts.forecast.4
+```
+
+```{r}
+# Create a table with regression forecast, trailing MA for residuals
+
+total.reg.ma.pred <- data.frame(trend.season.pred$mean, ma.trailing.res_4.pred$mean, 
+                                ts.forecast.4)
+names(total.reg.ma.pred) <- c("Regression Pred", "TMA", "Forecast")
+
+total.reg.ma.pred
+```
+
+```{r}
+print("Regression with Qadratic Trend and seasonality + Trailing MA")
+round(accuracy(trend.season.pred$fitted + ma.trailing.res_4, beer_ts), 3) #combined forecast
+```
+
+```{r}
+plot(beer_ts, 
+     xlab = "Time", ylab = "Production (In Millions)", ylim = c(100, 700), bty = "l",
+     xaxt = "n", xlim = c(1980, 2014),
+     main = "30-Year Regression with Quadratic Trend and Seasonality
+     + Trailing Moving Average") 
+
+axis(1, at = seq(1980, 2014, 1), labels = format(seq(1980, 2014, 1)))
+
+lines(trend.season.pred$fitted, col = "blue")
+
+lines(trend.season.pred$mean + ma.trailing.res_4.pred$mean, col = "blue", lty =5)
+
+
+legend(1993,300, legend = c("Production", "HW + TMA",
+                             "4 Period  Future Forecast"), 
+       col = c("black", "blue" , "blue"), 
+       lty = c(1, 1, 5), lwd =c(2, 2, 2), bty = "n")
+
+lines(c(2010.4, 2010.4), c(0, 700))
+
+
+text(1995, 675, "Training")
+
+text(2014, 675, "Future")
+
+
+arrows(1980, 635, 2007, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+
+arrows(2011, 635, 2014.5, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+```
+
+Autocorrelation For Residuals
+```{r}
+# Plot an ACF Function for the residuals
+
+Acf(trend.season$residuals, lag.max = 12, 
+    main = "30-Year Autocorrelation  Residuals of Residuals")
+```
+
+```{r}
+# Use Arima() function to fit AR(1) model for regression residuals.
+residual.ar1 <- Arima(trend.season$residuals, order = c(1,0,0))
+
+# Use summary() to identify parameters of AR(1) model.
+summary(residual.ar1)
+```
+
+```{r}
+# Autocorrealtion for the residuals of the residuals
+
+Acf(residual.ar1$residuals, lag.max = 12, 
+    main = "30 year Autocorrelation Residuals of Residuals for Entire Data Set")
+
+```
+
+```{r}
+# Use Arima() function to fit AR(2) model for regression residulas.
+residual.ar2 <- Arima(trend.season$residuals, order = c(2,0,0))
+
+# Use summary() to identify parameters of AR(2) model.
+summary(residual.ar2)
+```
+
+```{r}
+Acf(residual.ar2$residuals, lag.max = 12, 
+    main = "Autocorrelation for Production Residuals of Residuals for Entire Data Set")
+```
+
+```{r}
+# Use Arima() function to fit AR(3) model for regression residulas.
+residual.ar3 <- Arima(trend.season$residuals, order = c(3,0,0))
+
+# Use summary() to identify parameters of AR(3) model.
+summary(residual.ar3)
+```
+
+```{r}
+Acf(residual.ar3$residuals, lag.max = 12, 
+    main = "Autocorrelation for Residuals of Residuals for Entire Data Set")
+```
+
+```{r}
+residual.ar4 <- Arima(trend.season$residuals, order = c(4,0,0))
+
+# Use summary() to identify parameters of AR(4) model.
+summary(residual.ar4)
+```
+
+```{r}
+Acf(residual.ar4$residuals, lag.max = 12, 
+    main = "Autocorrelation for Residuals of Residuals for Entire Data Set")
+```
+
+```{r}
+# Use forecast() function to make prediction of residuals into the future 4 months.
+residual.ar4.pred <- forecast(residual.ar4, h = 4, level = 0)
+```
+
+```{r}
+new.df <- data.frame(beer_ts,  # historical
+                     trend.season$fitted,  # regression output
+                     trend.season$residuals, # regression residuals
+                     residual.ar4$fitted,     # Residuals of the AR model
+                     residual.ar4$residuals)  # reg residuals - AR residuals
+
+names(new.df) <- c("Sales", "Regression", "Residuals",
+                     "AR.Model", "AR.Model.Residuals")
+new.df
+```
+
+```{r}
+
+trend.season.ar4.pred <- trend.season.pred$mean + residual.ar4.pred$mean
+trend.season.ar4.pred # combined forecast
+```
+
+```{r}
+table.df <- data.frame(trend.season.pred$mean, 
+                    residual.ar4.pred$mean, trend.season.ar4.pred)
+names(table.df) <- c("Reg.Forecast", "AR(4)Forecast","Combined.Forecast")
+table.df
+```
+
+
+```{r}
+plot(beer_ts, 
+xlab = "Year", ylab = "Production", 
+     ylim = c(200, 700),
+     xlim = c(1980, 2015),
+     xaxt = 'n',
+     bty = "l",
+     main = "30 Year Regression with Trend and Seasonlity + 
+     AR(4) for Residuals", col = "black")
+
+axis(1, at = seq(1980, 2015, 1), labels = format(seq(1980, 2015, 1))) 
+
+lines(trend.season$fitted + residual.ar1$fitted, col = "blue")
+
+lines(trend.season.ar4.pred, col = "blue", lty = 5, lwd = 2)
+
+legend(1993,350, legend = c("Production", "HW + TMA",
+                             "4 Period  Future Forecast"), 
+       col = c("black", "blue" , "blue"), 
+       lty = c(1, 1, 5), lwd =c(2, 2, 2), bty = "n")
+
+lines(c(2010.4, 2010.4), c(0, 700))
+
+
+text(1995, 675, "Training")
+
+text(2014, 675, "Future")
+
+
+arrows(1980, 635, 2007, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+
+arrows(2011, 635, 2016, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+```
+
+```{r}
+print("Regression with Quadratic Trend and Seasonality + AR(4)")
+round(accuracy(trend.season$fitted + residual.ar4$fitted, beer_ts), 3)
+```
+
+ARIMA
+```{r}
+# ARIMA ON TRAINING
+train.auto.arima <- auto.arima(train.ts)
+summary(train.auto.arima)
+```
+
+```{r}
+# Apply forecast() function to make predictions for ts with  auto ARIMA model in validation set.  
+train.auto.arima.pred <- forecast(train.auto.arima, h = nValid, level = 0)
+train.auto.arima.pred
+```
+
+```{r}
+plot(train.auto.arima.pred, 
+xlab = "Year", ylab = "Beer Production", 
+     ylim = c(200, 700),
+     xlim = c(1980, 2015),
+     xaxt = 'n',
+     bty = "l",
+     main = "30 Year Auto ARIMA Model (Train/Val)", col = "black")
+
+axis(1, at = seq(1980, 2015, 1), labels = format(seq(1980, 2015, 1))) 
+
+lines(train.auto.arima$fitted, col = "blue")
+lines(valid.ts)
+
+lines(c(2009.2, 2009.2), c(0, 700))
+
+text(1995, 675, "Training")
+text(2014, 675, "Validation")
+
+arrows(1980, 635, 2007, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+arrows(2011, 635, 2016, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+
+legend(1980,600, legend = c("Beer Production", "Training",
+                             "Validation Forecast"), 
+       col = c("black", "blue" , "blue"), 
+       lty = c(1, 1, 5), lwd =c(2, 2, 2), bty = "n")
+```
+
+```{r}
+# Training Accuracy
+round(accuracy(train.auto.arima.pred, valid.ts), 3)
+```
+
+
+```{r}
+#AUTO ARIMA on entire dataset
+auto.arima <- auto.arima(beer_ts)
+summary(auto.arima)
+```
+
+```{r}
+auto.arima.pred <- forecast(auto.arima, h = 4, level = 0)
+auto.arima.pred
+```
+
+```{r}
+plot(beer_ts, 
+xlab = "Year", ylab = "Beer Production", 
+     ylim = c(200, 700),
+     xlim = c(1980, 2015),
+     xaxt = 'n',
+     bty = "l",
+     main = "30 Year Auto ARIMA Model for Entire Dataset", col = "black")
+
+axis(1, at = seq(1980, 2015, 1), labels = format(seq(1980, 2015, 1))) 
+
+lines(auto.arima$fitted, col = "blue")
+lines(auto.arima.pred$mean, col = "blue", lty = 5)
+lines(c(2010.4, 2010.4), c(0, 700))
+
+text(1995, 675, "Training")
+text(2014, 675, "Future")
+
+arrows(1980, 635, 2007, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+arrows(2011, 635, 2016, 635, code = 3, length = 0.1,
+       lwd = 1, angle = 30)
+
+legend(1980,600, legend = c("Beer Production", "Training",
+                             "Future Forecast"), 
+       col = c("black", "blue" , "blue"), 
+       lty = c(1, 1, 5), lwd =c(2, 2, 2), bty = "n")
+```
+
+```{r}
+print("Auto-Arima Model")
+round(accuracy(auto.arima.pred$fitted, beer_ts), 3)
+```
+
